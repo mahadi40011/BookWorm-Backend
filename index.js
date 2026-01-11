@@ -1,8 +1,9 @@
 dotenv.config();
 import express from "express";
 import dotenv from "dotenv";
-import bcrypt from "bcrypt"
+import bcrypt from "bcrypt";
 import cors from "cors";
+import jwt from "jsonwebtoken";
 import { MongoClient } from "mongodb";
 const app = express();
 const port = process.env.PORT || "3000";
@@ -47,6 +48,7 @@ async function run() {
           image,
           email,
           password: hashedPassword,
+          role: "user",
         });
         res.status(201).json({
           message: "User created successfully!",
@@ -55,6 +57,51 @@ async function run() {
       } catch (err) {
         res.status(400).json({
           message: "Failed to create user!",
+          err,
+        });
+      }
+    });
+
+    //login user and generate jwt
+    app.post("/login", async (req, res) => {
+      try {
+        const { email, password } = req.body;
+        const user = await usersCollection.findOne({
+          email,
+        });
+
+        if (!user) {
+          return res.status(404).json({
+            message: "User not found!",
+          });
+        }
+
+        const isMatchedPassword = await bcrypt.compare(password, user.password);
+
+        if (!isMatchedPassword) {
+          return res.status(400).json({
+            message: "Password incorrect!",
+          });
+        }
+
+        const token = jwt.sign(
+          {
+            email: user.email,
+            _id: user._id,
+            role: user.role,
+          },
+          process.env.JWT_SECRET_KEY,
+          { expiresIn: "7d" }
+        );
+
+        res.status(200).json({
+          message: "Logged in successfully!",
+          token,
+        });
+      } catch (err) {
+        console.log(err);
+        res.status(400).json({
+          message: "Login failed!",
           err,
         });
       }
